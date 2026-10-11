@@ -5,7 +5,6 @@ import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -20,46 +19,36 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain chain(HttpSecurity http, JwtFilter f)
+    SecurityFilterChain chain(HttpSecurity http, JwtFilter jwtFilter)
             throws Exception {
 
         http
             .csrf(csrf -> csrf.disable())
 
-            .cors(Customizer.withDefaults())
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
             .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
-                )
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
 
             .authorizeHttpRequests(auth -> auth
-
-                // Allow registration and login without a JWT
-                .requestMatchers("/api/auth/**").permitAll()
-
-                // Allow browser CORS preflight requests
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                // Protect other endpoints
+                .requestMatchers("/api/auth/**").permitAll()
                 .anyRequest().authenticated()
             )
 
             .exceptionHandling(exception ->
-                exception.authenticationEntryPoint(
-                    (request, response, authException) -> {
-                        response.setStatus(401);
-                        response.setContentType("application/json");
-                        response.getWriter().write(
-                            "{\"success\":false,\"message\":\"Unauthorized\"}"
-                        );
-                    }
-                )
+                exception.authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json");
+                    response.getWriter().write(
+                        "{\"success\":false,\"message\":\"Unauthorized\"}"
+                    );
+                })
             )
 
             .addFilterBefore(
-                f,
+                jwtFilter,
                 UsernamePasswordAuthenticationFilter.class
             );
 
@@ -72,11 +61,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    CorsConfigurationSource cors() {
+    CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allow the deployed frontend and local development servers
         config.setAllowedOrigins(List.of(
             "https://frontend-kiran-e612.vercel.app",
             "http://localhost:5173",
@@ -97,6 +85,7 @@ public class SecurityConfig {
         ));
 
         config.setAllowCredentials(false);
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source =
             new UrlBasedCorsConfigurationSource();
